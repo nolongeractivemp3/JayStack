@@ -55,7 +55,6 @@ def dockerconfig():
         restart: always
       pocketbase:
         image: ghcr.io/muchobien/pocketbase:latest
-        container_name: pb_database
         ports:
           - "8080:8080"
         volumes:
