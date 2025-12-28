@@ -53,7 +53,7 @@ def dockerconfig():
         build: ./backend
         command: uv run main.py
         restart: always
-      pb:
+      pocketbase:
         image: ghcr.io/muchobien/pocketbase:latest
         container_name: pb_database
         ports:
