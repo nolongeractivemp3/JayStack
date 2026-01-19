@@ -9,5 +9,6 @@ logs with `docker-compose logs -f` name of service
 # networks
 to talk to things use `nameofservice:port` for example `backend:8080` or `pocketbase:8080`
 
-
+# goal 
+I made this so i can write ui faster as a more backend focused dev loading php through htmx is easier to develop for me then writing js which sucks 
 ![diagram](img/stack.png)
