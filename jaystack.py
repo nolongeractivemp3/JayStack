@@ -1,154 +1,115 @@
 import os
+import subprocess
+import sys
+import urllib.error
+import urllib.request
 
-path = "."
+REQUEST_TIMEOUT = 20
+SOURCE_BASE_URL = "tech.jaypo.ch"
+TARGET_DIR_NAME = "jaystack"
 
+DIRECTORIES = (
+    "frontend",
+    "frontend/components",
+    "frontend/js",
+    "frontend/css",
+    "backend",
+    "extras",
+)
 
-def setup_folders():
-    os.makedirs(path + "/frontend")
-    os.makedirs(path + "/frontend/components")
-    os.makedirs(path + "/frontend/js")
-    os.makedirs(path + "/frontend/css")
-    os.makedirs(path + "/backend")
-    os.makedirs(path + "/extras")
-
-    os.system("git init")
-    os.system(f"cd {path}/backend && uv init && uv sync")
-    os.system(
-        f"cd {path}/backend && uv add pocketbase && uv add fastapi && uv add uvicorn"
-    )
-
-
-def setup_backend():
-    open(path + "/backend/main.py", "w").write("""from fastapi import FastAPI
-import pocketbase
-pb = pocketbase.PocketBase("http://pocketbase:8080")
-app = FastAPI()
-@app.get("/")
-def root():
-    return "Hello World"
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=5000)
-    """)
+SCAFFOLD_FILES = (
+    "frontend/index.php",
+    "backend/main.py",
+    "backend/Dockerfile",
+    "docker-compose.yml",
+    "nginx.conf",
+    "AGENT.md",
+)
 
 
-def setup_frontend():
-    frontendboilerplate = """
-    <!DOCTYPE html>
-    <html lang="en">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta http-equiv="X-UA-Compatible" content="ie=edge">
-        <title>HTML 5 Boilerplate</title>
-        <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.js" integrity="sha384-ezjq8118wdwdRMj+nX4bevEi+cDLTbhLAeFF688VK8tPDGeLUe0WoY2MZtSla72F" crossorigin="anonymous"></script>
-        <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-        <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
-        <!-- <link rel="stylesheet" href="style.css"> -->
-      </head>
-      <body>
-        <!-- <script src="index.js"></script> -->
-      </body>
-    </html>
-    """
-    open(path + "/frontend/index.php", "w").write(frontendboilerplate)
+def run_checked(command, cwd):
+    subprocess.run(command, cwd=cwd, check=True)
 
 
-def dockerconfig():
-    config = """services:
-      php_app:
-        image: php:8.3-fpm
-        volumes:
-          - ./frontend:/var/www/html
-      nginx_server:
-        image: nginx:alpine
-        ports:
-          - "80:80" # change the first port number to match your needs
-        volumes:
-          - ./frontend:/var/www/html
-          - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      backend:
-        build: ./backend
-        command: uv run main.py
-        restart: always
-        ports:
-          - "5000:5000"
-      pocketbase:
-        image: ghcr.io/muchobien/pocketbase:latest
-        ports:
-          - "{preferences.pocketbaseport}:8080"
-        volumes:
-          - ./pb_data:/pb_data
-        command:
-          - serve
-          - --http=0.0.0.0:8080
-          - --dir=/pb_data
-        restart: unless-stopped"""
-    composefile = open(path + "/docker-compose.yml", "w")
-    composefile.write(config)
-    composefile.close()
-    serverconfig = """FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+def create_directories(project_root):
+    for relative_dir in DIRECTORIES:
+        os.makedirs(os.path.join(project_root, relative_dir), exist_ok=True)
 
-WORKDIR /app
 
-# Enable bytecode compilation
-ENV UV_COMPILE_BYTECODE=1
-ENV UV_NO_DEV=1
+def download_file(url):
+    with urllib.request.urlopen(url, timeout=REQUEST_TIMEOUT) as response:
+        return response.read()
 
-# Optimized layer caching
-COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-install-project --no-dev
 
-COPY . .
-RUN uv sync --frozen --no-dev
+def download_scaffold_files(project_root, base_url):
+    for relative_path in SCAFFOLD_FILES:
+        source_url = f"{base_url}/scaffold/{relative_path}"
+        destination = os.path.join(project_root, relative_path)
+        os.makedirs(os.path.dirname(destination), exist_ok=True)
+        try:
+            content = download_file(source_url)
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"Failed to download {source_url}: {exc}") from exc
+        with open(destination, "wb") as f:
+            f.write(content)
 
-CMD ["uv", "run", "main.py"]"""
-    dockerfile = open(path + "/backend/Dockerfile", "w")
-    dockerfile.write(serverconfig)
-    dockerfile.close()
 
-    nginxconfig = """server {
-        listen 80;
-        root /var/www/html;
+def initialize_git(project_root):
+    if not os.path.isdir(os.path.join(project_root, ".git")):
+        run_checked(["git", "init"], cwd=project_root)
 
-        # Use Docker's internal DNS resolver
-        resolver 127.0.0.11 valid=30s;
 
-        location / {
-            index index.php;
-            try_files $uri $uri/ /index.php?$query_string;
-        }
+def initialize_backend(project_root):
+    backend_dir = os.path.join(project_root, "backend")
 
-        location ~ .php$ {
-            # Using a variable prevents Nginx from crashing if php_app is down
-            set $upstream php_app:9000;
-            fastcgi_pass $upstream;
-            include fastcgi_params;
-            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-        }
-    }"""
+    try:
+        run_checked(["uv", "--version"], cwd=project_root)
+    except FileNotFoundError as exc:
+        raise RuntimeError("'uv' is required but was not found in PATH.") from exc
 
-    nginxfile = open(path + "/nginx.conf", "w")
-    nginxfile.write(nginxconfig)
-    nginxfile.close()
+    if not os.path.isfile(os.path.join(backend_dir, "pyproject.toml")):
+        run_checked(["uv", "init"], cwd=backend_dir)
+
+    run_checked(["uv", "sync"], cwd=backend_dir)
+    run_checked(["uv", "add", "pocketbase", "fastapi", "uvicorn"], cwd=backend_dir)
 
 
 def main():
-    print("==============================================\nWelcome to JayStack!")
-    print("Setting up folders")
-    setup_folders()
-    print("Setting up Docker configuration")
-    dockerconfig()
-    setup_frontend()
-    setup_backend()
-    print("""Your project is ready!\n
-    start it with: sudo docker compose up -d\n
-    If you have a frontend you can acces it at http://localhost:80
-    If you have a backend you can acces it at http://localhost:5000 publicly and http://backend:5000 privately
-    If you have a database you can acces it at http://localhost:8080/_ (enter sudo docker logs pocketbase to get the password)
-    and http://pocketbase:8080 privately
-    """)
+    base_url = SOURCE_BASE_URL.rstrip("/")
+    if not base_url.startswith("http://") and not base_url.startswith("https://"):
+        raise RuntimeError(
+            "SOURCE_BASE_URL must start with http:// or https:// "
+            f"(current: {SOURCE_BASE_URL!r})."
+        )
+
+    project_root = os.path.abspath(TARGET_DIR_NAME)
+
+    print("==============================================")
+    print("Welcome to JayStack!")
+    print(f"Target directory: {project_root}")
+    print(f"Scaffold source: {base_url}/scaffold/")
+
+    create_directories(project_root)
+    download_scaffold_files(project_root, base_url)
+    initialize_git(project_root)
+    initialize_backend(project_root)
+
+    print(
+        """Your project is ready!
+start it with: docker compose up -d --build
+Frontend: http://localhost:80
+Backend (public): http://localhost:5000
+Backend (internal): http://backend:5000
+PocketBase (public): http://localhost:8080/_
+PocketBase (internal): http://pocketbase:8080
+"""
+    )
+    return 0
 
 
-main()
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except (RuntimeError, subprocess.CalledProcessError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
