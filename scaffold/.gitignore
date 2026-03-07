@@ -1,0 +1,7 @@
+pb_data/
+
+# Ignore Python cache artifacts anywhere under backend.
+backend/**/__pycache__/
+backend/**/*.pyc
+backend/**/*.pyo
+backend/**/*.pyd

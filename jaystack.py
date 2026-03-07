@@ -18,6 +18,7 @@ DIRECTORIES = (
 )
 
 SCAFFOLD_FILES = (
+    ".gitignore",
     "frontend/index.php",
     "backend/main.py",
     "backend/Dockerfile",
