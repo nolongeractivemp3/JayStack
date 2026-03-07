@@ -68,7 +68,7 @@ def initialize_backend(project_root):
         raise RuntimeError("'uv' is required but was not found in PATH.") from exc
 
     if not os.path.isfile(os.path.join(backend_dir, "pyproject.toml")):
-        run_checked(["uv", "init"], cwd=backend_dir)
+        run_checked(["uv", "init", "--python", "3.12"], cwd=backend_dir)
 
     run_checked(["uv", "sync"], cwd=backend_dir)
     run_checked(["uv", "add", "pocketbase", "fastapi", "uvicorn"], cwd=backend_dir)
@@ -96,12 +96,15 @@ def main():
 
     print(
         """Your project is ready!
-start it with: docker compose up -d --build
+start it with: docker compose up -d
 Frontend: http://localhost:80
 Backend (public): http://localhost:5000
 Backend (internal): http://backend:5000
 PocketBase (public): http://localhost:8080/_
 PocketBase (internal): http://pocketbase:8080
+
+Backend code changes reload automatically inside Docker.
+Rebuild only after changing backend dependencies or backend/Dockerfile.
 """
     )
     return 0

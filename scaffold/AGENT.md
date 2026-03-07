@@ -8,6 +8,8 @@ We use PocketBase for the database.
 
 # Commands
 
-docker compose up -d --build
+docker compose up -d
 docker compose logs
 docker compose down
+
+Use `docker compose up -d --build` only after changing the backend Dockerfile or Python dependencies.
